@@ -180,6 +180,10 @@ class MyOneTimeTask(BaseTask):
 - **`self.find_one(feature_name, ...)`**: `find_feature` 的便捷版本，只返回可信度最高的那个匹配结果。
   - 返回值: `Box` 或 `None`。
 
+- 使用label-studio定义标注图
+    - conda activate labelstudio
+    - label-studio start
+
 ---
 
 ## 5. `ocr` (光学字符识别) 相关方法

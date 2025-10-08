@@ -1,6 +1,6 @@
 import random
 import re
-
+import os
 from ok import BaseTask
 from ok import Logger
 logger = Logger.get_logger(__name__)
@@ -33,21 +33,21 @@ class MyBaseTask(BaseTask):
             x_percent = first_box.x / 1280
             y_percent = first_box.y / 720
             logger.info(f"✅ 找到目标Box: '{first_box.name}' (置信度: {first_box.confidence:.2f})")
-            logger.info(f"  相对百分比: ({x_percent:.3f}, {y_percent:.3f})")
+            logger.info(f"✅  相对百分比: ({x_percent:.3f}, {y_percent:.3f})")
             return first_box
         else:
             logger.info(f"❌ 未找到匹配 '{match}' 的Box")
             return None
         
     def find_box_by_ocr(self, x1, y1, tox, toy, match):
-        box_list = self.ocr(x1, y1, tox, toy, match=match, log=True)
+        box_list = self.ocr(x1, y1, tox, toy, match=re.compile(match), log=True)
         if box_list:
             first_box = box_list[0]
             # 计算相对坐标百分比
             x_percent = first_box.x / 1280
             y_percent = first_box.y / 720
             logger.info(f"✅ 找到目标Box: '{first_box.name}' (置信度: {first_box.confidence:.2f})")
-            logger.info(f"  相对百分比: ({x_percent:.3f}, {y_percent:.3f})")
+            logger.info(f"✅  相对百分比: ({x_percent:.3f}, {y_percent:.3f})")
             return first_box
         else:
             logger.info(f"❌ 未找到匹配 '{match}' 的Box")
@@ -61,7 +61,7 @@ class MyBaseTask(BaseTask):
             x_percent = first_box.x / 1280
             y_percent = first_box.y / 720
             logger.info(f"✅ 找到目标Box: '{first_box.name}' (置信度: {first_box.confidence:.2f})")
-            logger.info(f"  相对百分比: ({x_percent:.3f}, {y_percent:.3f})")
+            logger.info(f"✅  相对百分比: ({x_percent:.3f}, {y_percent:.3f})")
             return first_box
         else:
             logger.info(f"❌ 未找到匹配 '{match}' 的Box")
@@ -104,6 +104,7 @@ class MyBaseTask(BaseTask):
         down_time = self.getRound(0.2)
 
         logger.info(f"🎯 区域随机点击: ({target_x}, {target_y}, {down_time})")
+
         self.click(target_x, target_y, down_time)
         return True
 
@@ -136,10 +137,10 @@ class MyBaseTask(BaseTask):
         final_x_percent = max(0.0, min(1.0, final_x_percent))
         final_y_percent = max(0.0, min(1.0, final_y_percent))
         
-        logger.info(f"   基础相对坐标: ({x_percent:.4f}, {y_percent:.4f})")
-        logger.info(f"   最终相对坐标: ({final_x_percent:.4f}, {final_y_percent:.4f})")
-        
         down_time = self.getRound()
+
+        logger.info(f"🎯 区域随机点击: ({final_x_percent:.4f}, {final_y_percent:.4f})")
+
         self.click(final_x_percent, final_y_percent, down_time)
         return True
     
@@ -150,13 +151,24 @@ class MyBaseTask(BaseTask):
 
     def clickRandomBox(self, box, time=1):
         self.click_box_area_random(box)
+        logger.info(f"clickRandomBox wait second time={time} ")
         if (time > 0):
             self._sleep(time)
 
-    def closeErrorDialog(self):
-        # if (self.clickImg('')):
-            # self._sleep(1)
+    def closeErrorDialogWhileAttack(self):
+        if (self.clickImg(match='close_invite')):
+            self._sleep(1)
             logger.info(f"closeErrorDialog ")
+        if (self.findOcr(match='悬赏封印')):
+            self.exitPage()
+            logger.info(f"closeErrorDialog ")
+
+    def closeErrorDialog(self):
+        if (self.clickImg(match='close_invite')):
+            self._sleep(1)
+            logger.info(f"closeErrorDialog ")
+        if (self.findOcr(match="是否打开大人之前被自动关")):
+            self.clickRandom(0.41,0.58)
 
     def exitPage(self):
         self.pressKeyRandom('esc')
@@ -183,11 +195,77 @@ class MyBaseTask(BaseTask):
             return box
         else:
             return None
+        
+    def findImg(self, x1 = 0, y1 = 0, tox = 1, toy = 1, match = ""):
+        return self.find_box_by_cv(x1, y1, tox, toy, match)
 
     def _sleep(self, time = 1):
         timemin = min(1, time + 0.5)
         timemax = max(1, time + 1)
         timerandom = random.randint(timemin, timemax)
-        logger.info(f" wait '{timerandom}' second")
+        logger.info(f" time={time} wait '{timerandom}' second")
         self.sleep(timerandom)
-        self.closeErrorDialog()
+        self.closeErrorDialogWhileAttack()
+
+    def enterGame(self):
+        # self.clickRandom(0.01,0.03)
+        # self._sleep(3)
+        if (self.findImg(match='home_enter_game')):
+            logger.info(f" 识别到处于选择账号界面 点击进入游戏 ")
+            self.clickRandom(0.48,0.57)
+        # self.clickOcr(match='进入游戏', time=4)
+
+    # 识别当前的界面处于什么状态
+    # 处于庭院
+    # 处于探索界面
+    # 处于组队挑战界面
+    # 处于战斗状态
+    # 处于战斗结束后的结算状态
+    def checkState(self):
+        if self.findImg(match='home'):
+            return 'home'
+        box = self.findImg(match='attack_success', time=0)
+        if box:
+            self._sleep(1)
+            self.clickRandomBox(box, time=5)
+            return 'attack_success'
+        box = self.findImg(match='attack_success_fudai', time=0)
+        if box:
+            self._sleep(1)
+            self.clickRandomBox(box, time=5)
+            return 'attack_success_fudai'
+        return ''
+
+    def checkAttackState(self):
+        if self.findOcr(0.02,0.8,match='自动'):
+            return 'attack_auto_attacking'
+        box = self.findImg(match='attack_success')
+        if box:
+            self.clickRandomBox(box, time=4)
+            return 'attack_success'
+        box = self.findImg(match='attack_success_fudai')
+        if box:
+            self.clickRandomBox(box, time=4)
+            return 'attack_success_fudai'
+        box = self.findImg(match='attack_fail')
+        if box:
+            self.clickRandomBox(box, time=4)
+            return 'attack_fail'
+        if self.findOcr(0.02,0.8,match='自') and self.findOcr(0.02,0.8,match='动'):
+            return 'attack_auto_attacking'
+        return ''
+
+    def intoTansuo(self):
+        return self.clickImg(match='home_tansuo', time=2)
+    
+    def waitAttackEnd(self):
+        notEnding = True
+        while notEnding:
+            state = self.checkAttackState()
+            if state == 'attack_success_fudai':
+                notEnding = False
+            self._sleep(1)
+
+    # 立即关机
+    def shutdown(self):
+        os.system("shutdown /s /t 0")
