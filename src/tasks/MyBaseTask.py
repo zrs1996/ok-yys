@@ -116,28 +116,34 @@ class MyBaseTask(BaseTask):
             screen_width: 屏幕宽度
             screen_height: 屏幕高度
         """
+        down_time = self.getRound()
+
         if box:
             x_center, y_center = box.center()
             x_percent = x_center / screen_width
             y_percent = y_center / screen_height
-        elif x > 0:
+            # 在相对坐标基础上添加随机偏移
+            x_offset_percent = self.getRound(0,0.005,0.01, 3)  # ±1%的随机偏移
+            y_offset_percent = self.getRound(0,0.005,0.01, 3)
+        elif x > 0 and x < 1:
             x_percent = x
             y_percent = y
+            # 在相对坐标基础上添加随机偏移
+            x_offset_percent = self.getRound(0,0.005,0.01, 3)  # ±1%的随机偏移
+            y_offset_percent = self.getRound(0,0.005,0.01, 3)
         else:
-            return False
+            # 在相对坐标基础上添加随机偏移
+            x_offset_percent = self.getRound(0,0.005,0.01, 3)  # ±10的随机偏移
+            y_offset_percent = self.getRound(0,0.005,0.01, 3)
         
-        # 在相对坐标基础上添加随机偏移
-        x_offset_percent = self.getRound(0,0.005,0.01, 3)  # ±1%的随机偏移
-        y_offset_percent = self.getRound(0,0.005,0.01, 3)
         
         final_x_percent = x_percent + x_offset_percent
         final_y_percent = y_percent + y_offset_percent
         
         # 确保在有效范围内
-        final_x_percent = max(0.0, min(1.0, final_x_percent))
-        final_y_percent = max(0.0, min(1.0, final_y_percent))
+        final_x_percent = max(0.0, min(1, final_x_percent))
+        final_y_percent = max(0.0, min(1, final_y_percent))
         
-        down_time = self.getRound()
 
         logger.info(f"🎯 区域随机点击: ({final_x_percent:.4f}, {final_y_percent:.4f})")
 
@@ -200,7 +206,7 @@ class MyBaseTask(BaseTask):
         return self.find_box_by_cv(x1, y1, tox, toy, match)
 
     def _sleep(self, time = 1):
-        timemin = min(1, time + 0.5)
+        timemin = min(time, time + 0.5)
         timemax = max(1, time + 1)
         timerandom = random.randint(timemin, timemax)
         logger.info(f" time={time} wait '{timerandom}' second")
