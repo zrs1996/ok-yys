@@ -47,7 +47,7 @@ def make_bottom_right_black(frame):
         return frame
 
 config = {
-    'debug': True,  # Optional, default: False
+    'debug': False,  # Optional, default: False
     'use_gui': True,
     'config_folder': 'configs',
     'global_configs': [key_config_option],
@@ -108,6 +108,7 @@ config = {
     'my_app': ['src.globals', 'Globals'], # 全局单例对象, 可以存放加载的模型, 使用og.my_app调用
     'onetime_tasks': [  # tasks to execute
         ["src.tasks.DailyTask", "DailyTask"],
+        ["src.tasks.MiwenTask", "MiwenTask"],
         ["src.tasks.JiejiePersonTask", "JiejiePersonTask"],
         ["src.tasks.YuhunTask", "YuhunTask"],
         ["src.tasks.YulingTask", "YulingTask"],

@@ -1,13 +1,18 @@
+from datetime import datetime
 import random
 import re
 import os
 from ok import BaseTask
 from ok import Logger
+import json
 logger = Logger.get_logger(__name__)
 class MyBaseTask(BaseTask):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+    # 数据库
+    
 
     # 公共方法
     def operate(self, func):
@@ -24,6 +29,15 @@ class MyBaseTask(BaseTask):
 
     def do_send_key_up(self, key):
         self.executor.interaction.do_send_key_up(key)
+
+    def getTime(self):
+        # 获取当前时间的时分（24小时制）
+        current_time = datetime.now()
+        return current_time.hour, current_time.minute
+    def getHour(self):
+        # 获取当前时间的时分（24小时制）
+        current_time = datetime.now()
+        return current_time.hour
     
     def wait_find_box_by_ocr(self, x1, y1, tox, toy, match):
         box_list = self.wait_ocr(x1, y1, tox, toy, match=match, log=True, settle_time=1, raise_if_not_found=True)
@@ -39,8 +53,11 @@ class MyBaseTask(BaseTask):
             logger.info(f"❌ 未找到匹配 '{match}' 的Box")
             return None
         
-    def find_box_by_ocr(self, x1, y1, tox, toy, match):
-        box_list = self.ocr(x1, y1, tox, toy, match=re.compile(match), log=True)
+    def find_box_by_ocr(self, x1, y1, tox, toy, match, fullMatch=False):
+        if fullMatch:
+            box_list = self.ocr(x1, y1, tox, toy, match=match, log=True)
+        else:
+            box_list = self.ocr(x1, y1, tox, toy, match=re.compile(match), log=True)
         if box_list:
             first_box = box_list[0]
             # 计算相对坐标百分比
@@ -53,7 +70,15 @@ class MyBaseTask(BaseTask):
             logger.info(f"❌ 未找到匹配 '{match}' 的Box")
             return None
         
-    def find_box_by_cv(self, x, y, to_x, to_y, match):
+    def find_box_by_cv(self,match,wait=False,timeout=15,time=1):
+        if wait:
+            self.wait_click_feature(
+                match, 
+                time_out=timeout, 
+                settle_time=0.5, 
+                after_sleep=time
+            )
+            return
         box_list = self.find_feature(match)
         if box_list:
             first_box = box_list[0]
@@ -123,18 +148,18 @@ class MyBaseTask(BaseTask):
             x_percent = x_center / screen_width
             y_percent = y_center / screen_height
             # 在相对坐标基础上添加随机偏移
-            x_offset_percent = self.getRound(0,0.005,0.01, 3)  # ±1%的随机偏移
-            y_offset_percent = self.getRound(0,0.005,0.01, 3)
+            x_offset_percent = self.getRound(0,0.002,0.005, 3)  # ±1%的随机偏移
+            y_offset_percent = self.getRound(0,0.002,0.005, 3)
         elif x > 0 and x < 1:
             x_percent = x
             y_percent = y
             # 在相对坐标基础上添加随机偏移
-            x_offset_percent = self.getRound(0,0.005,0.01, 3)  # ±1%的随机偏移
-            y_offset_percent = self.getRound(0,0.005,0.01, 3)
+            x_offset_percent = self.getRound(0,0.002,0.005, 3)  # ±1%的随机偏移
+            y_offset_percent = self.getRound(0,0.002,0.005, 3)
         else:
             # 在相对坐标基础上添加随机偏移
-            x_offset_percent = self.getRound(0,0.005,0.01, 3)  # ±10的随机偏移
-            y_offset_percent = self.getRound(0,0.005,0.01, 3)
+            x_offset_percent = self.getRound(0,0.002,0.005, 3)  # ±10的随机偏移
+            y_offset_percent = self.getRound(0,0.002,0.005, 3)
         
         
         final_x_percent = x_percent + x_offset_percent
@@ -151,30 +176,34 @@ class MyBaseTask(BaseTask):
         return True
     
     def clickRandom(self, x, y, time=1):
+        logger.info(f"clickRandom wait second time={time} ")
         self.click_box_relative_random(None,x,y)
-        if (time > 0):
+        if(time > 0):
             self._sleep(time)
 
     def clickRandomBox(self, box, time=1):
-        self.click_box_area_random(box)
         logger.info(f"clickRandomBox wait second time={time} ")
-        if (time > 0):
+        self.click_box_area_random(box)
+        if(time > 0):
             self._sleep(time)
 
     def closeErrorDialogWhileAttack(self):
-        if (self.clickImg(match='close_invite')):
-            self._sleep(1)
-            logger.info(f"closeErrorDialog ")
+        if (self.clickImg(match='close_invite', time=0)):
+            self.sleep(1)
+            logger.info(f"关闭邀请")
         if (self.findOcr(match='悬赏封印')):
-            self.exitPage()
-            logger.info(f"closeErrorDialog ")
+            self.pressKeyRandom('esc')
+            self.sleep(1)
+            logger.info(f"关闭悬赏封印")
 
     def closeErrorDialog(self):
         if (self.clickImg(match='close_invite')):
-            self._sleep(1)
-            logger.info(f"closeErrorDialog ")
+            self.sleep(1)
+            logger.info(f"关闭邀请")
         if (self.findOcr(match="是否打开大人之前被自动关")):
-            self.clickRandom(0.41,0.58)
+            self.clickRandom(0.41,0.58, time=0)
+            logger.info(f"关闭是否打开大人之前被自动关必提示")
+            self.sleep(1)
 
     def exitPage(self):
         self.pressKeyRandom('esc')
@@ -182,28 +211,28 @@ class MyBaseTask(BaseTask):
     
     # 外层api
 
-    def findOcr(self, x1 = 0, y1 = 0, tox = 1, toy = 1, match = ""):
-        box = self.find_box_by_ocr(x1, y1, tox, toy, match)
+    def findOcr(self, x1 = 0, y1 = 0, tox = 1, toy = 1, match = "", fullMatch=False):
+        box = self.find_box_by_ocr(x1, y1, tox, toy, match, fullMatch)
         return box
 
-    def clickOcr(self, x1 = 0, y1 = 0, tox = 1, toy = 1, match = "", time = 1):
-        box = self.find_box_by_ocr(x1, y1, tox, toy, match)
+    def clickOcr(self, x1 = 0, y1 = 0, tox = 1, toy = 1, match = "", time = 1, fullMatch=False):
+        box = self.find_box_by_ocr(x1, y1, tox, toy, match, fullMatch)
         if (box):
             self.clickRandomBox(box, time)
             return box
         else:
             return None
 
-    def clickImg(self, x1 = 0, y1 = 0, tox = 1, toy = 1, match = "", time = 1):
-        box = self.find_box_by_cv(x1, y1, tox, toy, match)
+    def clickImg(self, match = "", timeout=15, time = 1,wait=False):
+        box = self.find_box_by_cv(match,wait,time,timeout)
         if (box):
             self.clickRandomBox(box, time)
             return box
         else:
             return None
         
-    def findImg(self, x1 = 0, y1 = 0, tox = 1, toy = 1, match = ""):
-        return self.find_box_by_cv(x1, y1, tox, toy, match)
+    def findImg(self, match = "", timeout=15, time = 1,wait=False):
+        return self.find_box_by_cv(match,wait,time,timeout)
 
     def _sleep(self, time = 1):
         timemin = min(time, time + 0.5)
@@ -211,7 +240,6 @@ class MyBaseTask(BaseTask):
         timerandom = random.randint(timemin, timemax)
         logger.info(f" time={time} wait '{timerandom}' second")
         self.sleep(timerandom)
-        self.closeErrorDialogWhileAttack()
 
     def enterGame(self):
         # self.clickRandom(0.01,0.03)
