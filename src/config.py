@@ -108,6 +108,8 @@ config = {
     'my_app': ['src.globals', 'Globals'], # 全局单例对象, 可以存放加载的模型, 使用og.my_app调用
     'onetime_tasks': [  # tasks to execute
         ["src.tasks.DailyTask", "DailyTask"],
+        ["src.tasks.TestTask", "TestTask"],
+        ["src.tasks.DailyDiGuiTask", "DailyDiGuiTask"],
         ["src.tasks.MiwenTask", "MiwenTask"],
         ["src.tasks.JiejiePersonTask", "JiejiePersonTask"],
         ["src.tasks.YuhunTask", "YuhunTask"],
