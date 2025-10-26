@@ -1,24 +1,19 @@
 from datetime import datetime
 import random
 import win32gui
-import win32ui
+import win32api
+import time
 import win32con
-# import d3dshot
 import numpy as np
-import mss
-import dxcam
 import cv2
-import pyautogui
 import re
 import os
 
 from ctypes import windll, byref, c_ubyte
-from ctypes.wintypes import RECT
 from ctypes import wintypes
 
 from ok import BaseTask
 from ok import Logger
-import json
 logger = Logger.get_logger(__name__)
 class MyBaseTask(BaseTask):
 
@@ -26,6 +21,41 @@ class MyBaseTask(BaseTask):
         super().__init__(*args, **kwargs)
 
     # 数据库
+
+    def getWindowPos(self):
+        hwnd = win32gui.FindWindow(None, '阴阳师-网易游戏')
+        left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+        return left, top
+
+    def getCilentPos(self):
+            hwnd = win32gui.FindWindow(None, '阴阳师-网易游戏')
+            client_left, client_top, client_right, client_bottom = win32gui.GetClientRect(hwnd)
+             # 转换客户区坐标为屏幕坐标
+            client_rect = win32gui.ClientToScreen(hwnd, (client_left, client_top))
+            # 计算客户区在屏幕上的位置和尺寸
+            client_screen_left = client_rect[0]
+            client_screen_top = client_rect[1]
+            return client_screen_left, client_screen_top
+    
+    def click_at_position(self, x, y):
+        """
+        在指定窗口的指定位置模拟鼠标点击
+        :param hwnd: 窗口句柄
+        :param x: 窗口内的x坐标
+        :param y: 窗口内的y坐标
+        """
+        # 将窗口坐标转换为屏幕坐标
+        left, top = self.getWindowPos()
+        screen_x = left + int(x * 1280)
+        screen_y = top + int(y * 720)
+        
+        # 将鼠标移动到指定位置
+        win32api.SetCursorPos((screen_x, screen_y))
+        
+        # 模拟鼠标按下和释放
+        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, screen_x, screen_y, 0, 0)
+        time.sleep(0.05)  # 短暂延迟，模拟真实点击
+        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, screen_x, screen_y, 0, 0)
     
     def Capture(self):
         hwnd = win32gui.FindWindow(None, '阴阳师-网易游戏')
@@ -158,7 +188,7 @@ class MyBaseTask(BaseTask):
                 abs(g1 - g2) == tolerance and 
                 abs(b1 - b2) == tolerance)
     
-    def checkColor(self, x,y, targetRgb):
+    def checkColor(self, x = 0,y = 0, x1 = 0, y1 = 0, rgb = (0,0,0)):
         """获取屏幕的RGB颜色值
             
         Returns:
@@ -170,21 +200,28 @@ class MyBaseTask(BaseTask):
 
         height, width, channels = screenshot.shape
         # 获取特定坐标的颜色 (x, y)
-        abs_x  = int(x * width)
-        abs_y = int(y * height)
+        abs_x  = 0
+        abs_y = 0
+        if x > 0 and y > 0:
+            abs_x  = int(x * width)
+            abs_y = int(y * height)
+        elif x1 > 0 and y1 > 0:
+            left, top = self.getCilentPos()
+            abs_x  = x1 - left
+            abs_y = y1 - top
         # 获取颜色 (numpy数组的索引是 [y, x])
         color_bgr = screenshot[abs_y, abs_x]
         # 转换为 RGB
         color_rgb = (int(color_bgr[2]), int(color_bgr[1]), int(color_bgr[0]))  # BGR -> RGB
         print(f"🎨 获取特定坐标的颜色: x {abs_x } y {abs_y} rgb {color_rgb}")
 
-        if targetRgb and color_rgb:
-            result = self.is_color_similar(color_rgb, targetRgb)
+        if rgb and color_rgb:
+            result = self.is_color_similar(color_rgb, rgb)
             if result:
-                print(f"✅ 找到目标 {targetRgb}")
+                print(f"✅ 找到目标 {rgb}")
                 return True
             else:
-                print(f"❌ 未找到目标 实际rgb: {color_rgb} 目标rgb: {targetRgb}")
+                print(f"❌ 未找到目标 实际rgb: {color_rgb} 目标rgb: {rgb}")
                 return False
         return False
                 
@@ -202,7 +239,7 @@ class MyBaseTask(BaseTask):
             print(f"❌ 未找到匹配 '{match}' 的Box")
             return None
         
-    def find_box_by_ocr(self, x1, y1, tox, toy, match, fullMatch=False):
+    def find_box_by_ocr(self, x1 = 0, y1 = 0, tox = 1, toy = 1, match = '', fullMatch=False):
         if fullMatch:
             box_list = self.ocr(x1, y1, tox, toy, match=match, log=True)
         else:
@@ -213,7 +250,7 @@ class MyBaseTask(BaseTask):
             x_percent = first_box.x / 1280
             y_percent = first_box.y / 720
             print(f"✅ 找到目标Box: '{first_box.name}' (置信度: {first_box.confidence:.2f})")
-            print(f"✅  相对百分比: ({x_percent:.3f}, {y_percent:.3f})")
+            print(f"✅ 左上角位置({first_box.x}, {first_box.y}) 相对百分比: ({x_percent:.3f}, {y_percent:.3f})")
             return first_box
         else:
             print(f"❌ 未找到匹配 '{match}' 的Box")
@@ -384,19 +421,17 @@ class MyBaseTask(BaseTask):
         return self.find_box_by_cv(match,wait,time,timeout)
 
     def _sleep(self, time = 1):
-        timemin = min(time, time + 0.5)
         timemax = max(1, time + 1)
-        timerandom = random.randint(timemin, timemax)
+        timerandom = random.randint(1, timemax)
         print(f" time={time} wait '{timerandom}' second")
         self.sleep(timerandom)
 
     def enterGame(self):
-        # self.clickRandom(0.01,0.03)
-        # self._sleep(3)
         if (self.findImg(match='home_enter_game')):
             print(f" 识别到处于选择账号界面 点击进入游戏 ")
-            self.clickRandom(0.48,0.57)
-        # self.clickOcr(match='进入游戏', time=4)
+            self.click_at_position(0.5,0.58)
+            self._sleep(5)
+            self.clickOcr(0.4,0.7, match='进入游戏')
 
     # 识别当前的界面处于什么状态
     # 处于庭院
@@ -407,35 +442,30 @@ class MyBaseTask(BaseTask):
     def checkState(self):
         if self.findImg(match='home'):
             return 'home'
-        box = self.findImg(match='attack_success', time=0)
-        if box:
-            self._sleep(1)
-            self.clickRandomBox(box, time=5)
-            return 'attack_success'
-        box = self.findImg(match='attack_success_fudai', time=0)
-        if box:
-            self._sleep(1)
-            self.clickRandomBox(box, time=5)
-            return 'attack_success_fudai'
+        
         return ''
 
     def checkAttackState(self):
+        # 战斗中
         if self.findOcr(0.02,0.8,match='自动'):
             return 'attack_auto_attacking'
-        box = self.findImg(match='attack_success')
-        if box:
-            self.clickRandomBox(box, time=4)
-            return 'attack_success'
-        box = self.findImg(match='attack_success_fudai')
-        if box:
-            self.clickRandomBox(box, time=4)
-            return 'attack_success_fudai'
-        box = self.findImg(match='attack_fail')
-        if box:
-            self.clickRandomBox(box, time=4)
-            return 'attack_fail'
         if self.findOcr(0.02,0.8,match='自') and self.findOcr(0.02,0.8,match='动'):
             return 'attack_auto_attacking'
+        # 战斗结束---成功
+        box = self.findImg(match='attack_success')
+        if box:
+            self.clickRandomBox(box)
+            return 'attack_success'
+        # 战斗结束---结算
+        box = self.findImg(match='attack_success_fudai')
+        if box:
+            self.clickRandomBox(box)
+            return 'attack_success_fudai'
+        # 战斗结束---失败
+        box = self.findImg(match='attack_fail')
+        if box:
+            self.clickRandomBox(box)
+            return 'attack_fail'
         return ''
 
     def intoTansuo(self):
@@ -451,4 +481,4 @@ class MyBaseTask(BaseTask):
 
     # 立即关机
     def shutdown(self):
-        os.system("shutdown /s /t 0")
+        os.system("shutdown /s /t 0")()
